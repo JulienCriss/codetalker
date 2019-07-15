@@ -1,10 +1,14 @@
-from rules import RuleLoader
-from tokens import EOF, INDENT, DEDENT, Token
-from errors import *
+from __future__ import print_function
+from future.utils import iteritems
 
-from nodes import AstNode, ParseTree, TokenStream
-from logger import logger
 import inspect
+
+from .rules import RuleLoader
+from .tokens import EOF, INDENT, DEDENT, Token
+from .errors import *
+
+from .nodes import AstNode, ParseTree, TokenStream
+from .logger import logger
 
 # from codetalker.pgm.cgrammar.tokenize import tokenize
 # from codetalker.pgm.cgrammar import main
@@ -16,19 +20,23 @@ import time
 
 TIME = False
 
-def camelCase(text):
+
+def camel_case(text):
     return text.replace('_', ' ').title().replace(' ', '')
 
-class Grammar:
-    '''This is the main driving class -- it sets up the grammar,
+
+class Grammar(object):
+    """
+    This is the main driving class -- it sets up the grammar,
     tokenizes, parses, and translates into an AST.
 
     "process" is the main entry point (currently) -- you feed it
     text, it gives you back a ParseTree (tokenizes and parses)
-    '''
+    """
     special_tokens = (INDENT, DEDENT, EOF)
+
     def __init__(self, start, tokens=(), ignore=(), idchars='', indent=False, ast_tokens=()):
-        '''Grammar constructor
+        """Grammar constructor
 
             start: the start rule [function]
             tokens: an iterable of Token subclasses [used to tokenize text]
@@ -36,9 +44,9 @@ class Grammar:
             indent: boolean (default false) indicating whether to output
                     INDENT and DEDENT tokens while tokenizing (got use in indentation
                     sensitive languages such as python) self.start = start
-        '''
+        """
         self.start = start
-        self.tokens = list(tokens) # + self.special_tokens
+        self.tokens = list(tokens)  # + self.special_tokens
         self.ignore = tuple(ignore)
         for i in ignore:
             if i not in self.tokens and i not in self.special_tokens:
@@ -48,33 +56,34 @@ class Grammar:
                 self.tokens.append(i)
         self.ast_tokens = tuple(self.tokens.index(tok) for tok in ast_tokens)
         self.indent = indent
-        self.idchars = idchars
+        # Note this needs to be reviewed, should we be converting str to bytes or the other way around
+        self.idchars = idchars.encode('utf-8')
 
         self.token_rules = []
         self.token_names = []
-        self.token_dict  = {}
+        self.token_dict = {}
 
-        self.rules      = []
-        self.rule_dict  = {}
+        self.rules = []
+        self.rule_dict = {}
         self.rule_names = []
         self.real_rules = []
-        self.ast_attrs  = []
+        self.ast_attrs = []
         self.ast_classes = type('ClassHolder', (), {})
 
         self.load_rule(self.start)
         self.replace_tokens()
 
-        ## cache the grammar definition
+        # cache the grammar definition
         self.GID = consume_grammar(self.rules, self.ignore, self.indent,
                                    self.idchars, self.rule_names, self.rule_dict,
                                    self.tokens, self.ast_attrs)
 
     def load_rule(self, builder):
-        '''Load a rule into the grammar and cache it for
+        """Load a rule into the grammar and cache it for
         future use
-        
+
         example rule:
-            
+
             def start(rule):
                 rule | (ID, '=', plus(value))
                 rule.astAttrs = {'left':{'type':ID, 'single':True},
@@ -89,14 +98,14 @@ class Grammar:
             start: int
             end: int; for slicing
             optional: bool - default False
-        '''
+        """
         if builder in self.rule_dict:
             return self.rule_dict[builder]
         num = len(self.rules)
         name = getattr(builder, 'astName', None)
         if name is None:
-            name = camelCase(builder.__name__)
-        
+            name = camel_case(builder.__name__)
+
         rule = RuleLoader(self)
         rule.name = name
 
@@ -109,10 +118,10 @@ class Grammar:
         rule.builder = builder
         if not rule.options:
             raise Exception('no rule options specified in %r' % builder)
-        attrs = []
-        for attr, dct in rule.astAttrs.iteritems():
+
+        for attr, dct in rule.astAttrs.items():
             if type(dct) != dict:
-                dct = {'type':dct}
+                dct = {'type': dct}
             if type(dct['type']) not in (tuple, list):
                 types = [dct['type']]
             else:
@@ -129,22 +138,11 @@ class Grammar:
                 else:
                     raise AstError('invalid ast "type": %s (must be a token or rule)' % typ)
 
-        '''
-        for attr, dct in rule.astAttrs.iteritems():
-            error_suffix = ' for astAttr "%s" in rule "%s"' % (attr, name)
-            if type(dct) != dict:
-                dct = {'type':dct}
-            if not 'type' in dct:
-                raise RuleError('must specify a type' + error_suffix)
-            if type(dct['type']) not in (tuple, list):
-                dct['type'] = (dct['type'],)
-            whiches = tuple(self.which(that) for that in dct['type'])
-            attrs.append((attr, whiches, dct.get('single', False), dct.get('start', 0), dct.get('end', None), dct.get('optional', False)))
-            '''
-        self.ast_attrs[num] = {'attrs':rule.astAttrs, 'pass_single':getattr(rule, 'pass_single', False)}
+        self.ast_attrs[num] = {'attrs': rule.astAttrs, 'pass_single': getattr(rule, 'pass_single', False)}
         if len(rule.astAttrs):
-            ## TODO: convert name to TitleCase for class name?
-            setattr(self.ast_classes, name, type(name, (AstNode,), {'__slots__':('_tree',) + tuple(rule.astAttrs.keys())}))
+            # TODO: convert name to TitleCase for class name?
+            setattr(self.ast_classes, name,
+                    type(name, (AstNode,), {'__slots__': ('_tree',) + tuple(rule.astAttrs.keys())}))
         return num
 
     def replace_tokens(self):
@@ -154,7 +152,7 @@ class Grammar:
                 self.replace_ind(option)
 
     def replace_ind(self, option):
-        for i,item in enumerate(option):
+        for i, item in enumerate(option):
             if inspect.isclass(item) and issubclass(item, Token):
                 option[i] = -(1 + self.tokens.index(item))
             elif type(item) in (tuple, list):
@@ -173,29 +171,30 @@ class Grammar:
         start_i = self.rule_dict[start]
         return get_ast(self.GID, text, start_i, self.ast_classes, self.ast_tokens)
 
-    def get_parse_tree(self, text, start=None): ## , start=None, debug = False):
-        '''main entry point for parsing text.
+    def get_parse_tree(self, text, start=None):  # , start=None, debug = False):
+        """main entry point for parsing text.
 
             text: string - to parse
             start: optional custom start function (for advanced parsing)
             # debug: boolean (default false) to output debug parse tracing
-        '''
+        """
         if start is None:
             start = self.start
         if start not in self.rule_dict:
             raise KeyError("Invalid start rule", start, self.rule_dict.keys())
         start_i = self.rule_dict[start]
         return get_parse_tree(self.GID, text, start_i)
+
     process = get_parse_tree
-    
+
     def which(self, obj):
         if isinstance(obj, Token):
-            if not obj.__class__ in self.tokens:
+            if obj.__class__ not in self.tokens:
                 raise RuleError('invalid token specified: %r' % obj)
             return -(self.tokens.index(obj.__class__) + 1)
         # unused
         elif inspect.isclass(obj) and issubclass(obj, Token):
-            if not obj in self.tokens:
+            if obj not in self.tokens:
                 raise RuleError('invalid token specified: %r' % obj)
             return -(self.tokens.index(obj) + 1)
         elif obj in self.tokens:
@@ -211,70 +210,73 @@ class Grammar:
         elif isinstance(child, main.pyParseNode):
             return child.rule
         if type(child) == tuple:
-            return -(child[0]+1)
+            return -(child[0] + 1)
         return child[0]
 
     def to_ast(self, tree):
         raise Exception('not using this one anymore')
-        if isinstance(tree, main.pyToken):
-            return self.tokens[tree.type](tree.value, tree.lineno, tree.charno)
-        rule = tree.rule
-        name = self.rule_names[rule]
-        if self.ast_attrs[rule]:
-            node = getattr(self.ast_classes, name)()
-            node.name = name
-            node._rule = rule
-            node._tree = tree
-            for attr, whiches, single, start, end, optional in self.ast_attrs[rule]:
-                children = [child for child in tree.children if self.which_(child) in whiches]
-                if single and len(children) <= start:
-                    if optional:
-                        setattr(node, attr, None)
-                        continue
-                    raise RuleError('ast attribute not found: %s' % attr)
-                if single:
-                    setattr(node, attr, self.to_ast(children[start]))
-                else:
-                    setattr(node, attr, tuple(self.to_ast(child) for child in children[start:end]))
-            return node
-        else:
-            rload = self.real_rules[rule]
-            if rload.pass_single:
-                for child in tree.children:
-                    if isinstance(child, main.pyToken):
-                        if self.tokens[child.type] in self.ast_tokens:
-                            return self.tokens[child.type](child.value, child.lineno, child.charno)
-                    else:
-                        return self.to_ast(child)
-                raise RuleError('failure -- nothing to ast-tize %s %s' % (rload, tree))
-            else:
-                items = []
-                for child in tree.children:
-                    if isinstance(child, main.pyToken):
-                        child = self.tokens[child.type](child.value, child.lineno, child.charno)
-                        if child.rule in self.ast_tokens:
-                            items.append(child)
-                    else:
-                        items.append(self.to_ast(child))
-                return items
+        # if isinstance(tree, main.pyToken):
+        #     return self.tokens[tree.type](tree.value, tree.lineno, tree.charno)
+        # rule = tree.rule
+        # name = self.rule_names[rule]
+        # if self.ast_attrs[rule]:
+        #     node = getattr(self.ast_classes, name)()
+        #     node.name = name
+        #     node._rule = rule
+        #     node._tree = tree
+        #     for attr, whiches, single, start, end, optional in self.ast_attrs[rule]:
+        #         children = [child for child in tree.children if self.which_(child) in whiches]
+        #         if single and len(children) <= start:
+        #             if optional:
+        #                 setattr(node, attr, None)
+        #                 continue
+        #             raise RuleError('ast attribute not found: %s' % attr)
+        #         if single:
+        #             setattr(node, attr, self.to_ast(children[start]))
+        #         else:
+        #             setattr(node, attr, tuple(self.to_ast(child) for child in children[start:end]))
+        #     return node
+        # else:
+        #     rload = self.real_rules[rule]
+        #     if rload.pass_single:
+        #         for child in tree.children:
+        #             if isinstance(child, main.pyToken):
+        #                 if self.tokens[child.type] in self.ast_tokens:
+        #                     return self.tokens[child.type](child.value, child.lineno, child.charno)
+        #             else:
+        #                 return self.to_ast(child)
+        #         raise RuleError('failure -- nothing to ast-tize %s %s' % (rload, tree))
+        #     else:
+        #         items = []
+        #         for child in tree.children:
+        #             if isinstance(child, main.pyToken):
+        #                 child = self.tokens[child.type](child.value, child.lineno, child.charno)
+        #                 if child.rule in self.ast_tokens:
+        #                     items.append(child)
+        #             else:
+        #                 items.append(self.to_ast(child))
+        #         return items
 
     def parse_rule(self, rule, tokens, error):
         if rule < 0 or rule >= len(self.rules):
             raise ParseError('invalid rule: %d' % rule)
-        if logger.output:print>>logger, 'parsing for rule', self.rule_names[rule]
+        if logger.output:
+            print('parsing for rule', self.rule_names[rule], file=logger)
         logger.indent += 1
         node = ParseTree(rule, self.rule_names[rule])
         for option in self.rules[rule]:
             res = self.parse_children(rule, option, tokens, error)
             if res is not None:
-                if logger.output:print>>logger, 'yes!',self.rule_names[rule], res
+                if logger.output:
+                    print('yes!', self.rule_names[rule], res, file=logger)
                 logger.indent -= 1
                 node.children = res
                 return node
-        if logger.output:print>>logger, 'failed', self.rule_names[rule]
+        if logger.output:
+            print('failed', self.rule_names[rule], file=logger)
         logger.indent -= 1
         return None
-    
+
     def parse_children(self, rule, children, tokens, error):
         i = 0
         res = []
@@ -284,7 +286,8 @@ class Grammar:
                     res.append(tokens.current())
                     tokens.advance()
             current = children[i]
-            if logger.output:print>>logger, 'parsing child',current,i
+            if logger.output:
+                print('parsing child', current, i, file=logger)
             if type(current) == int:
                 if current < 0:
                     ctoken = tokens.current()
@@ -294,10 +297,12 @@ class Grammar:
                         i += 1
                         continue
                     else:
-                        if logger.output:print>>logger, 'token mismatch', ctoken, self.tokens[-(current + 1)]
+                        if logger.output:
+                            print('token mismatch', ctoken, self.tokens[-(current + 1)], file=logger)
                         if tokens.at > error[0]:
                             error[0] = tokens.at
-                            error[1] = 'Unexpected token %s; expected %s (while parsing %s)' % (repr(ctoken), self.tokens[-(current + 1)], self.rule_names[rule])
+                            error[1] = 'Unexpected token %s; expected %s (while parsing %s)' % (
+                                repr(ctoken), self.tokens[-(current + 1)], self.rule_names[rule])
                         return None
                 else:
                     ctoken = tokens.current()
@@ -307,7 +312,8 @@ class Grammar:
                         tokens.at = at
                         if tokens.at >= error[0]:
                             error[0] = tokens.at
-                            error[1] = 'Unexpected token %s; expected %s (while parsing %s)' % (repr(ctoken), self.rule_names[current], self.rule_names[rule])
+                            error[1] = 'Unexpected token %s; expected %s (while parsing %s)' % (
+                                repr(ctoken), self.rule_names[current], self.rule_names[rule])
                         return None
                     res.append(sres)
                     i += 1
@@ -321,22 +327,28 @@ class Grammar:
                     continue
                 if tokens.at > error[0]:
                     error[0] = tokens.at
-                    error[1] = 'Unexpected token %s; expected \'%s\' (while parsing %s)' % (repr(ctoken), current.encode('string_escape'), self.rule_names[rule])
-                if logger.output:print>>logger, 'FAIL string compare:', [current, tokens.current().value]
+                    error[1] = 'Unexpected token %s; expected \'%s\' (while parsing %s)' % (
+                        repr(ctoken), current.encode('string_escape'), self.rule_names[rule])
+                if logger.output:
+                    print('FAIL string compare:', [current, tokens.current().value], file=logger)
                 return None
             elif type(current) == tuple:
                 st = current[0]
                 if st == '*':
-                    if logger.output:print>>logger, 'star repeat'
+                    if logger.output:
+                        print('star repeat', file=logger)
                     while 1:
-                        if logger.output:print>>logger, 'trying one'
+                        if logger.output:
+                            print('trying one', file=logger)
                         at = tokens.at
                         sres = self.parse_children(rule, current[1:], tokens, error)
                         if sres:
-                            if logger.output:print>>logger, 'yes! (star)'
+                            if logger.output:
+                                print('yes! (star)', file=logger)
                             res += sres
                         else:
-                            if logger.output:print>>logger, 'no (star)'
+                            if logger.output:
+                                print('no (star)', file=logger)
                             tokens.at = at
                             break
                     i += 1
@@ -387,6 +399,3 @@ class Grammar:
                     raise ParseError('invalid special token: %s' % st)
             return None
         return res
-
-
-# vim: et sw=4 sts=4

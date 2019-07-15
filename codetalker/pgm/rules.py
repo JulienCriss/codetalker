@@ -1,21 +1,24 @@
 #!/usr/bin/env python
 
-from errors import *
-import tokens
-from tokens import Token
-import types
-from special import Special
 import inspect
+import types
+
+from .errors import *
+from .special import Special
+from .tokens import Token
+
 
 class RuleLoader(object):
-    __slots__ = ('grammar', 'options', 'token', 'dont_ignore', 'astAttrs', 'pass_single', 'builder', 'name', 'keep_tree')
+    __slots__ = (
+        'grammar', 'options', 'token', 'dont_ignore', 'astAttrs', 'pass_single', 'builder', 'name', 'keep_tree')
+
     def __init__(self, grammar, token=False):
         self.grammar = grammar
         self.options = []
         self.token = token
         self.dont_ignore = False
         self.astAttrs = {}
-        self.pass_single = False # single or multi
+        self.pass_single = False  # single or multi
         self.keep_tree = False
 
     def __or__(self, other):
@@ -38,7 +41,7 @@ class RuleLoader(object):
             options = []
             for item in what:
                 options += self.process(item)
-            return options # flatten nested tuples
+            return options  # flatten nested tuples
         elif type(what) == list:
             options = []
             for item in what:
@@ -52,7 +55,7 @@ class RuleLoader(object):
                 else:
                     options += self.process(item)
             return [(what.char,) + tuple(options)]
-        elif type(what) == types.FunctionType:
+        elif isinstance(what, types.FunctionType):  # type(what) == types.FunctionType:
             return [self.grammar.load_rule(what)]
         else:
             raise RuleError('invalid rule item found: %s' % what)
@@ -60,8 +63,10 @@ class RuleLoader(object):
     def rule(self):
         return Rule(options=self.options, dont_ignore=self.dont_ignore)
 
+
 class Rule(object):
     __slots__ = ('options', 'dont_ignore')
+
     def __init__(self, **args):
         for arg in args:
             setattr(self, arg, args[arg])

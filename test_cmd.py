@@ -1,9 +1,9 @@
 from distutils.core import Command
 from distutils.errors import DistutilsOptionError
-from distutils.fancy_getopt import longopt_xlate
-import string
 import sys
 from unittest import TestLoader, main
+from future.utils import itervalues
+from future.types.newstr import newstr
 
 uninitialized = object()
 
@@ -20,9 +20,9 @@ class test(Command):
 
     def initialize_options(self):
         self.test_type = 'py.test'
-        for (_,_,_,_,options) in self.test_commands.values():
+        for (_, _, _, _, options) in list(itervalues(self.test_commands)):
             for option in options:
-                name = string.translate(option[0], longopt_xlate).rstrip('=')
+                name = newstr(option[0]).translate(newstr.maketrans('-', '_')).rstrip('=')
                 setattr(self, name, uninitialized)
 
     @classmethod
@@ -42,7 +42,7 @@ class test(Command):
             validate(self)
         else:
             for option in options:
-                name = string.translate(option[0], longopt_xlate).rstrip('=')
+                name = newstr(option[0]).translate(newstr.maketrans('-', '_')).rstrip('=')
                 value = getattr(self, name,)
                 if value is uninitialized:
                     if name in defaults:
@@ -119,13 +119,13 @@ def run_py_test(tester):
     if py:
         py.test.cmdline.main(test_files)
     else:
-        print 'WARNING: py.test not found. falling back to unittest. For more informative errors, install py.test'
+        print('WARNING: py.test not found. falling back to unittest. For more informative errors, install py.test')
         import unittest
         suite = unittest.TestSuite()
         for filen in test_files:
             mod = get_pyfile(filen)
             suite.addTest(make_testcase(filen,
-                (fn for fn in mod.__dict__.values() if getattr(fn, '__name__', '').startswith('test_'))
+                (fn for fn in list(itervalues(mod.__dict__)) if getattr(fn, '__name__', '').startswith('test_'))
             ))
         t = unittest.TextTestRunner()
         t.run(suite)

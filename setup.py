@@ -4,17 +4,18 @@ try:
     from distutils.core import setup
     from distutils.extension import Extension
 except ImportError:
-    print 'distutils is required to install this module. If you have pip installed, run: pip instal distutils'
+    print('distutils is required to install this module. If you have pip installed, run: pip instal distutils')
     raise
 
 try:
     from Cython.Distutils import build_ext
+    from Cython.Build import cythonize
 except ImportError:
-    print 'Cython is required to install this module'
+    print('Cython is required to install this module')
     raise
 
 import os
-import glob
+import sys
 
 try:
     fp = open(os.path.join(os.path.dirname(__file__), "README.rst"))
@@ -24,8 +25,9 @@ except IOError:
     readme_text = ''
 
 pyx_mods = [
-        Extension('codetalker.cgrammar', ['codetalker/cgrammar.pyx', 'codetalker/c/parser.c', 'codetalker/c/_speed_tokens.c'])
-    ]
+    Extension('codetalker.cgrammar',
+              ['codetalker/cgrammar.pyx', 'codetalker/c/parser.c', 'codetalker/c/_speed_tokens.c'])
+]
 
 from test_cmd import test
 
@@ -43,16 +45,17 @@ setup(
         'License :: OSI Approved :: MIT License',
     ],
     options={
-        'test':{
-            'test_dir':['tests/parse', 'tests/tokenize', 'tests/contrib']
+        'test': {
+            'test_dir': ['tests/parse', 'tests/tokenize', 'tests/contrib']
         },
     },
     requires=['cython'],
 
-    cmdclass = {'build_ext': build_ext , 'test':test},
-    ext_modules = pyx_mods,
-    include_dirs = 'codetalker',
-    packages = ['codetalker', 'codetalker.pgm', 'codetalker.contrib'],
+    cmdclass={'build_ext': build_ext, 'test': test},
+    # ext_modules = pyx_mods,
+    ext_modules=cythonize(pyx_mods, gdb_debug=True, compiler_directives={'language_level': sys.version_info[0]}),
+    include_dirs='codetalker',
+    packages=['codetalker', 'codetalker.pgm', 'codetalker.contrib'],
 )
 
 # vim: et sw=4 sts=4

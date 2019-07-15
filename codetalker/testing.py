@@ -14,7 +14,7 @@ def parse_rule(name, grammar):
             def meta():
                 try:
                     res = grammar.get_parse_tree(string, start=rule)
-                except (ParseError, TokenError), e:
+                except (ParseError, TokenError) as e:
                     pass
                 else:
                     raise AssertionError('parsing was supposed to fail for', string, res)

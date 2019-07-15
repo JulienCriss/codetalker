@@ -1,5 +1,10 @@
 #!/usr/bin/env python
 
+# Workaround for relative imports not working outside package in Python 3
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 from util import just_tokenize, make_tests, make_fails, TSTRING, STRING, SSTRING, ID, WHITE, NUMBER, INT, HEX, CCOMMENT, CMCOMMENT, PYCOMMENT, NEWLINE, ANY
 
 def make_single(tok, *tests):

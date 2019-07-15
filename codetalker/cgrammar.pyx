@@ -1,5 +1,6 @@
 # cython: profile=True
 from libc.stdlib cimport malloc, free
+from cpython.version cimport PY_MAJOR_VERSION
 
 from codetalker.pgm.tokens import INDENT, DEDENT, EOF, Token as PyToken, ReToken
 from codetalker.pgm.errors import ParseError, TokenError, AstError
@@ -240,7 +241,7 @@ class ANYCHAR(CToken):
 
 class CharToken(PyToken):
     _type = CHARTOKEN
-    chars = ''
+    chars = b''
 
 class StringToken(PyToken):
     _type = STRTOKEN
@@ -257,7 +258,7 @@ class IIdToken(PyToken):
 python_data = {}
 
 def consume_grammar(rules, ignore, indent, idchars, rule_names, rule_funcs, tokens, ast_attrs):
-    '''Parse in a grammar, cache it, and return the grammar ID
+    """Parse in a grammar, cache it, and return the grammar ID
 
     Arguments:
         rules   : a list of the rules (python Rule objects)
@@ -271,7 +272,7 @@ def consume_grammar(rules, ignore, indent, idchars, rule_names, rule_funcs, toke
 
     Returns:
         gid : ID of the parsed grammar
-    '''
+    """
 
     cdef Grammar grammar
     grammar.rules = convert_rules(rules)
@@ -284,14 +285,14 @@ def consume_grammar(rules, ignore, indent, idchars, rule_names, rule_funcs, toke
     return gid
 
 def get_tokens(gid, text):
-    '''Expose the token generation to python.
+    """Expose the token generation to python.
 
     This is not called as part of the normal parsing - but if you want to do
     introspection, or testing, or you want to stop at the token stage, this
     will do it.
 
     Returns: a list of Tokens
-    '''
+    """
 
     cdef Token* tokens
 
@@ -307,7 +308,7 @@ cdef object try_get_tokens(int gid, char* text, Token** tokens):
     Raises a TokenError on failure
     '''
     cdef cTokenError error
-    error.text = ''
+    error.text = b''
     cdef Grammar* grammar = load_grammar(gid)
     if grammar.tokens.num != -1:
         tokens[0] = c_get_tokens(grammar, text, python_data[gid][2], &error)
@@ -319,12 +320,11 @@ cdef object try_get_tokens(int gid, char* text, Token** tokens):
             raise TokenError(error.text, text, error.lineno, error.charno)
 
 def get_parse_tree(gid, text, start_i):
-    '''This is the main entry point for parsing text according to a grammar.
+    """This is the main entry point for parsing text according to a grammar.
 
     First the text is tokenized, the parsed. Returns a ParseTree
-    '''
+    """
     cdef Token* tokens
-
     try_get_tokens(gid, text, &tokens)
 
     cdef TokenStream tstream = tokens_to_stream(tokens)
@@ -395,12 +395,14 @@ cdef object format_parse_error(int gid, TokenStream* tstream, Error* error):
     return txt
 
 def get_ast(gid, text, start_i, ast_classes, ast_tokens):
-    '''This does the full 9 yards. Tokenize, parse, convert to AST.'''
+    """This does the full 9 yards. Tokenize, parse, convert to AST."""
 
     cdef Grammar* grammar = load_grammar(gid)
     cdef Token* tokens
     cdef TokenStream tstream
     cdef cParseNode* ptree
+
+    text = text.encode('latin1')
 
     try:
         try_get_tokens(gid, text, &tokens)
@@ -478,6 +480,7 @@ cdef Rule convert_rule(object rule, unsigned int i):
     crule.dont_ignore = rule.dont_ignore
     crule.num = len(rule.options)
     crule.options = <RuleOption*>malloc(sizeof(RuleOption)*crule.num)
+    rule.name = rule.name.encode('utf-8')
     crule.name = rule.name
     crule.keep_tree = rule.keep_tree
     for i from 0<=i<crule.num:
@@ -562,7 +565,7 @@ cdef object convert_ast_attrs(object ast_attrs, object rules, object tokens, Ast
             continue
         else:
             result[i].pass_single = 0
-        keys = ast_attrs[i]['attrs'].keys()
+        keys = list(ast_attrs[i]['attrs'].keys())
         result[i].num = len(keys)
         if len(keys):
             result[i].attrs = <AstAttr*>malloc(sizeof(AstAttr)*result[i].num);
@@ -570,7 +573,10 @@ cdef object convert_ast_attrs(object ast_attrs, object rules, object tokens, Ast
             result[i].attrs = NULL
 
         for m from 0<=m<result[i].num:
-             convert_ast_attr(keys[m], ast_attrs[i]['attrs'][keys[m]], rules, tokens, &result[i].attrs[m])
+             key = keys[m]
+             if PY_MAJOR_VERSION >= 3 and isinstance(keys[m], str):
+                 key = keys[m].encode('utf-8')
+             convert_ast_attr(key, ast_attrs[i]['attrs'][keys[m]], rules, tokens, &result[i].attrs[m])
 
 cdef object which_rt(object it, object rules, object tokens):
     '''convert an ast type (rule or token object) into the appropriate ID, ready for AST construction.
@@ -848,14 +854,14 @@ cdef Token* _get_tokens(int gid, char* text, cTokenError* error, char* idchars):
             elif tokens[i]._type == RETOKEN:
                 res = tokens[i].check(state.text[state.at:])
             else:
-                print 'Unknown token type', tokens[i]._type, tokens[i]
+                print('Unknown token type', tokens[i]._type, tokens[i])
                  # should this raise an error?
 
             if res:
                 tmp = <Token*>malloc(sizeof(Token))
                 tmp.value = <char*>malloc(sizeof(char)*(res+1))
                 strncpy(tmp.value, state.text + state.at, res)
-                tmp.value[res] = '\0'
+                tmp.value[res] = b'\0'
                 tmp.allocated = 1
                 # print 'got token!', res, state.at, [tmp.value], state.lineno, state.charno
                 tmp.which = i
@@ -897,7 +903,7 @@ cdef Token* advance(int res, Token* current, bint indent, TokenState* state, int
         int ind = 0
         Token* tmp
     for i from state.at <= i < state.at + res:
-        if state.text[i] == '\n':
+        if state.text[i] == b'\n':
             numlines+=1
             last = i
     state.lineno += numlines
@@ -908,7 +914,7 @@ cdef Token* advance(int res, Token* current, bint indent, TokenState* state, int
     if not indent:
         return current
     # if we just consumed a newline, check & update the indents
-    if indent and res == 1 and state.text[state.at] == <char>'\n':
+    if indent and res == 1 and state.text[state.at] == <char>b'\n':
         ind = t_white(state.at + 1, state.text, state.ln)
         if ind < 0:
             return current
@@ -938,7 +944,7 @@ cdef Token* advance(int res, Token* current, bint indent, TokenState* state, int
                 current = tmp
                 cindent = state.indents[state.num_indents - 1]
             if ind != cindent:
-                etxt = 'invalid indentation -- %d (expected %d)' % (ind, cindent)
+                etxt = 'invalid indentation -- {} (expected {})'.format(ind, cindent).encode('latin1')
                 error.text = etxt
                 error.lineno = state.lineno
                 error.charno = state.charno

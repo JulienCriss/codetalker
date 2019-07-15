@@ -1,17 +1,19 @@
 #!/usr/bin/env python
 
-from tokens import Token
+from .tokens import Token
 import types
 import inspect
 import copy
-from nodes import AstNode
+from .nodes import AstNode
 
-from errors import CodeTalkerException
+from .errors import CodeTalkerException
+
 
 class TranslatorException(CodeTalkerException):
     pass
 
-class Translator:
+
+class Translator(object):
     def __init__(self, grammar, **defaults):
         self.grammar = grammar
         self.register = {}
@@ -23,6 +25,7 @@ class Translator:
     def translates(self, what):
         def meta(func):
             self.register[what] = func
+
             def beta(node, scope=None):
                 if node is None:
                     return None
@@ -30,7 +33,9 @@ class Translator:
                     return func(node, scope)
                 else:
                     return func(node)
+
             return beta
+
         return meta
 
     def translate(self, tree, scope=None):
@@ -68,7 +73,7 @@ class Translator:
                 stuff.update(args)
                 Scope = type('Scope', (), {})
                 scope = Scope()
-                for k,v in stuff.iteritems():
+                for k, v in stuff.items():
                     setattr(scope, k, v)
             return self.translate(tree, scope)
         elif args:

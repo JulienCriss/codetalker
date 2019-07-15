@@ -4,7 +4,8 @@ import sys
 
 DEBUG = False
 
-class Logger:
+
+class Logger(object):
     def __init__(self, output=True):
         self.indent = 0
         self.output = output
@@ -17,10 +18,11 @@ class Logger:
         self.output = True
 
     def write(self, text):
-        text = ' '*self.indent + text
+        text = ' ' * self.indent + text
         if self.output:
             sys.stdout.write(text)
         self.lines.append(text)
+
 
 logger = Logger(DEBUG)
 
